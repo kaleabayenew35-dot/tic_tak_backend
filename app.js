@@ -20,14 +20,16 @@ dotenv.config()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
-const PORT = process.env.BACKEND_PORT || process.env.PORT || 5000
+const PORT = process.env.BACKEND_PORT || process.env.PORT || 10000
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'https://xo-game-v2q1.onrender.com',
-  'https://xo-admin.onrender.com',
+  'https://tic-tak-5qd1.onrender.com',
+  'https://tic-tak-backend.onrender.com',
+  'https://system-admin-iou9.onrender.com',
+  'https://system-backend-1u5m.onrender.com',
 ]
 
 app.use(cors({
@@ -64,6 +66,6 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-app.listen(PORT, () => {
-  console.log(`XO backend running at http://localhost:${PORT}`)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`XO backend running at http://0.0.0.0:${PORT}`)
 })
