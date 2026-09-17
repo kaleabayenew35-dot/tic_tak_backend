@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS bots (
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
+
+CREATE TABLE IF NOT EXISTS ai_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ai_enabled INTEGER NOT NULL DEFAULT 1
+);
 `)
 
 const tokenColumns = db.prepare('PRAGMA table_info(tokens)').all()

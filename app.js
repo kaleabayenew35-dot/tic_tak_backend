@@ -14,6 +14,7 @@ import statsRoutes from './routes/statsRoutes.js'
 import { StatsController } from './controllers/statsController.js'
 import botsRoutes from './routes/botsRoutes.js'
 import { BotsController } from './controllers/botsController.js'
+import aiRoutes from './routes/aiRoutes.js'
 
 dotenv.config()
 
@@ -61,6 +62,7 @@ app.use('/api/xo', xoRoutes)
 app.use('/xo', xoRoutes)
 app.use('/api/stats', statsRoutes)
 app.use('/api/bots', botsRoutes)
+app.use('/api/ai', aiRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' })
