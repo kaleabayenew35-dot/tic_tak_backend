@@ -20,7 +20,7 @@ dotenv.config()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
-const PORT = process.env.BACKEND_PORT || process.env.PORT || 10000
+const PORT = process.env.PORT || process.env.BACKEND_PORT || 10000
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
