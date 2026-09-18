@@ -22,7 +22,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = process.env.PORT || process.env.BACKEND_PORT || 10000
-const allowedOrigins = [
+const HARDCODED_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'http://localhost:5173',
@@ -32,6 +32,14 @@ const allowedOrigins = [
   'https://system-admin-iou9.onrender.com',
   'https://system-backend-1u5m.onrender.com',
 ]
+
+// Merge with any extra origins defined in CORS_ORIGINS env var (comma-separated)
+const envOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean)
+
+const allowedOrigins = [...new Set([...HARDCODED_ORIGINS, ...envOrigins])]
 
 app.use(cors({
   origin: (origin, callback) => {
