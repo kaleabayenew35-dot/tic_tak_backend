@@ -6,9 +6,9 @@ import { signAdminToken } from '../middleware/auth.js'
 export const AdminController = {
   async login(req, res) {
     try {
-      AdminService.ensureSeeded()
+        await AdminService.ensureSeeded()
       const { username, password } = req.body
-      const admin = AdminService.authenticate(username, password)
+        const admin = await AdminService.authenticate(username, password)
 
       if (!admin) {
         return res.status(401).json({ error: 'Invalid username or password' })
@@ -24,7 +24,7 @@ export const AdminController = {
   async listOwners(req, res) {
     try {
       // list tokens with owner info
-      const rows = XoModel.getAllTokensWithOwners ? XoModel.getAllTokensWithOwners() : []
+        const rows = XoModel.getAllTokensWithOwners ? await XoModel.getAllTokensWithOwners() : []
       res.json({ ok: true, data: rows })
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message })
@@ -35,7 +35,7 @@ export const AdminController = {
     try {
       const limit = Number(req.query.limit || 50)
       const offset = Number(req.query.offset || 0)
-      const rows = TransactionModel.list({ limit, offset })
+        const rows = await TransactionModel.list({ limit, offset })
       res.json({ ok: true, data: rows })
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message })

@@ -4,7 +4,7 @@ import { attachLiveStream } from '../liveEventBus.js'
 export const LiveController = {
   async listChallenges(req, res) {
     try {
-      res.json(LiveService.listChallenges())
+      res.json(await LiveService.listChallenges())
     } catch (error) {
       res.status(500).json({ error: error.message })
     }
@@ -12,7 +12,7 @@ export const LiveController = {
 
   async recordMove(req, res) {
     try {
-      const match = LiveService.recordMove({
+      const match = await LiveService.recordMove({
         matchId: req.params.id,
         playerUsername: req.body.playerUsername || req.body.username,
         index: req.body.index,
@@ -25,7 +25,7 @@ export const LiveController = {
 
   async createChallenge(req, res) {
     try {
-      const challenge = LiveService.createChallenge(req.body)
+      const challenge = await LiveService.createChallenge(req.body)
       res.status(201).json(challenge)
     } catch (error) {
       res.status(400).json({ error: error.message })
@@ -34,7 +34,7 @@ export const LiveController = {
 
   async acceptChallenge(req, res) {
     try {
-      const result = LiveService.acceptChallenge(req.params.id)
+      const result = await LiveService.acceptChallenge(req.params.id)
       res.json(result)
     } catch (error) {
       const message = error.message?.includes('UNIQUE') ? 'Challenge already accepted' : error.message
@@ -45,7 +45,7 @@ export const LiveController = {
 
   async declineChallenge(req, res) {
     try {
-      const result = LiveService.declineChallenge(req.params.id)
+      const result = await LiveService.declineChallenge(req.params.id)
       res.json(result)
     } catch (error) {
       res.status(400).json({ error: error.message })
@@ -54,7 +54,7 @@ export const LiveController = {
 
   async listMatches(req, res) {
     try {
-      res.json(LiveService.listMatches())
+      res.json(await LiveService.listMatches())
     } catch (error) {
       res.status(500).json({ error: error.message })
     }
@@ -62,7 +62,7 @@ export const LiveController = {
 
   async getMatch(req, res) {
     try {
-      const match = LiveService.getMatch(req.params.id)
+      const match = await LiveService.getMatch(req.params.id)
       if (!match) {
         res.status(404).json({ error: 'Match not found' })
         return
@@ -75,7 +75,7 @@ export const LiveController = {
 
   async getPendingChallenges(req, res) {
     try {
-      const challenges = LiveService.getPendingChallenges(req.params.username)
+      const challenges = await LiveService.getPendingChallenges(req.params.username)
       res.json(challenges)
     } catch (error) {
       res.status(500).json({ error: error.message })
@@ -84,7 +84,7 @@ export const LiveController = {
 
   async forfeitMatch(req, res) {
     try {
-      const match = LiveService.forfeitMatch({ matchId: req.params.id, leavingUsername: req.body.playerUsername || req.body.username });
+      const match = await LiveService.forfeitMatch({ matchId: req.params.id, leavingUsername: req.body.playerUsername || req.body.username });
       res.json(match)
     } catch (error) {
       res.status(400).json({ error: error.message })

@@ -1,70 +1,13 @@
-import db from '../config/db.js'
+import { query } from '../config/db.js'
 import { TransactionModel } from './transactionModel.js'
-
-function normalizeUsername(username) {
-  return String(username || '').trim().replace(/^@/, '').toLowerCase()
-}
-
+function normalize(username) { return String(username || '').trim().replace(/^@/, '').toLowerCase() }
 export const XoModel = {
-  findPlayerByUsername(username) {
-    const normalized = normalizeUsername(username)
-    if (!normalized) return null
-    return db.prepare(`SELECT * FROM players WHERE lower(replace(trim(username), '@', '')) = ?`).get(normalized)
-  },
-
-  createPlayer({ username, phone = null, balance = 0 }) {
-    const normalized = normalizeUsername(username)
-    const info = db.prepare('INSERT INTO players (username, balance) VALUES (?, ?)').run(normalized, Number(balance || 0))
-    return db.prepare('SELECT * FROM players WHERE id = ?').get(info.lastInsertRowid)
-  },
-
-  ensurePlayer({ username, phone = null, balance = 0 }) {
-    const existing = this.findPlayerByUsername(username)
-    if (existing) return existing
-    return this.createPlayer({ username, phone, balance })
-  },
-
-  adjustPlayerBalance(username, delta) {
-    const player = this.findPlayerByUsername(username)
-    if (!player) throw new Error('Player not found')
-    const next = Number(player.balance || 0) + Number(delta || 0)
-    if (next < 0) throw new Error('Insufficient balance')
-    db.prepare('UPDATE players SET balance = ? WHERE id = ?').run(next, player.id)
-    return db.prepare('SELECT * FROM players WHERE id = ?').get(player.id)
-  },
-
-  findToken(token) {
-    if (!token) return null
-    return db.prepare('SELECT * FROM tokens WHERE token = ?').get(String(token))
-  },
-
-  getAllTokensWithOwners() {
-    return db.prepare(`
-      SELECT t.id as token_id, t.token, t.owner_id, p.username as owner_username, p.balance as owner_balance, t.backend_url
-      FROM tokens t
-      LEFT JOIN players p ON p.id = t.owner_id
-      ORDER BY t.created_at DESC
-    `).all()
-  },
-
-  getOwnerForToken(token) {
-    const rec = this.findToken(token)
-    if (!rec) return null
-    if (!rec.owner_id) return null
-    return db.prepare('SELECT * FROM players WHERE id = ?').get(rec.owner_id)
-  },
-
-  addToOwnerBalance(token, amount) {
-    const owner = this.getOwnerForToken(token)
-    if (!owner) throw new Error('Token owner not found')
-    const next = Number(owner.balance || 0) + Number(amount || 0)
-    db.prepare('UPDATE players SET balance = ? WHERE id = ?').run(next, owner.id)
-    // record transaction for owner
-    try {
-      TransactionModel.create({ owner_id: owner.id, owner_username: owner.username, amount, type: 'owner_fee', reference: token })
-    } catch (err) {
-      console.error('[XoModel.addToOwnerBalance] failed to record transaction', err.message)
-    }
-    return db.prepare('SELECT * FROM players WHERE id = ?').get(owner.id)
-  }
+  async findPlayerByUsername(username) { const value = normalize(username); if (!value) return null; const { rows } = await query("SELECT * FROM players WHERE lower(replace(trim(username), '@', '')) = $1", [value]); return rows[0] || null },
+  async createPlayer({ username, balance = 0 }) { const { rows } = await query('INSERT INTO players (username, balance) VALUES ($1, $2) RETURNING *', [normalize(username), Number(balance || 0)]); return rows[0] },
+  async ensurePlayer(data) { return (await this.findPlayerByUsername(data.username)) || this.createPlayer(data) },
+  async adjustPlayerBalance(username, delta) { const player = await this.findPlayerByUsername(username); if (!player) throw new Error('Player not found'); const next = Number(player.balance || 0) + Number(delta || 0); if (next < 0) throw new Error('Insufficient balance'); const { rows } = await query('UPDATE players SET balance = $1 WHERE id = $2 RETURNING *', [next, player.id]); return rows[0] },
+  async findToken(token) { if (!token) return null; const { rows } = await query('SELECT * FROM tokens WHERE token = $1', [String(token)]); return rows[0] || null },
+  async getAllTokensWithOwners() { const { rows } = await query(`SELECT t.id AS token_id, t.token, t.owner_id, p.username AS owner_username, p.balance AS owner_balance, t.backend_url FROM tokens t LEFT JOIN players p ON p.id = t.owner_id ORDER BY t.created_at DESC`); return rows },
+  async getOwnerForToken(token) { const rec = await this.findToken(token); if (!rec?.owner_id) return null; const { rows } = await query('SELECT * FROM players WHERE id = $1', [rec.owner_id]); return rows[0] || null },
+  async addToOwnerBalance(token, amount) { const owner = await this.getOwnerForToken(token); if (!owner) throw new Error('Token owner not found'); const updated = await this.adjustPlayerBalance(owner.username, amount); try { await TransactionModel.create({ owner_id: owner.id, owner_username: owner.username, amount, type: 'owner_fee', reference: token }) } catch (error) { console.error('[XoModel.addToOwnerBalance] transaction failed', error.message) } return updated },
 }

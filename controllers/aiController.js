@@ -2,7 +2,7 @@ import { AiConfigModel } from '../models/aiConfigModel.js'
 
 export const AiController = {
   getConfig(req, res) {
-    res.json({ ok: true, data: AiConfigModel.get() })
+    res.json({ ok: true, data: await AiConfigModel.get() })
   },
 
   updateConfig(req, res) {
@@ -10,6 +10,6 @@ export const AiController = {
     if (typeof aiEnabled !== 'boolean') {
       return res.status(400).json({ ok: false, error: 'aiEnabled must be a boolean' })
     }
-    res.json({ ok: true, data: AiConfigModel.update(aiEnabled) })
+    res.json({ ok: true, data: await AiConfigModel.update(aiEnabled) })
   },
 }

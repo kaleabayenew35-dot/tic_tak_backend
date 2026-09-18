@@ -5,11 +5,11 @@ import { XoService } from './xoService.js'
 import { StatsModel } from '../models/statsModel.js'
 
 export const LiveService = {
-  listChallenges() {
+  async listChallenges() {
     return LiveModel.getChallenges()
   },
 
-  createChallenge(payload) {
+  async createChallenge(payload) {
     const challengerUsername = payload.challengerUsername || payload.challenger || payload.username
     const opponentUsername = payload.opponentUsername || payload.opponent || payload.receiver
     const wagerAmount = Number(payload.wagerAmount ?? payload.amount ?? payload.betAmount ?? 0)
@@ -18,7 +18,7 @@ export const LiveService = {
       throw new Error('challengerUsername and opponentUsername are required')
     }
 
-    const challenge = LiveModel.createChallenge({ challengerUsername, opponentUsername, wagerAmount })
+    const challenge = await LiveModel.createChallenge({ challengerUsername, opponentUsername, wagerAmount })
 
     // Instantly notify the opponent via SSE so the invite modal appears
     // without waiting for their polling cycle.
@@ -29,10 +29,10 @@ export const LiveService = {
     return challenge
   },
 
-  acceptChallenge(id) {
+  async acceptChallenge(id) {
     const numericId = Number(id)
     if (!numericId) throw new Error('Challenge id is required')
-    const challenge = LiveModel.getChallengeById(numericId)
+    const challenge = await LiveModel.getChallengeById(numericId)
     if (!challenge) throw new Error('Challenge not found')
 
     // Attempt to deduct wager from both players before creating the match
@@ -40,14 +40,14 @@ export const LiveService = {
     try {
       if (wager > 0) {
         // Deduct challenger first
-        XoService.gameAction({ action: 'deduct', username: challenge.challenger_username, amount: wager })
+        await XoService.gameAction({ action: 'deduct', username: challenge.challenger_username, amount: wager })
         try {
           // Then deduct opponent; if it fails, refund challenger
-          XoService.gameAction({ action: 'deduct', username: challenge.opponent_username, amount: wager })
+          await XoService.gameAction({ action: 'deduct', username: challenge.opponent_username, amount: wager })
         } catch (err) {
           // refund challenger
           try {
-            XoService.gameAction({ action: 'credit', username: challenge.challenger_username, amount: wager })
+            await XoService.gameAction({ action: 'credit', username: challenge.challenger_username, amount: wager })
           } catch (refundErr) {
             console.error('[LiveService.acceptChallenge] failed to refund challenger after opponent deduction failure', refundErr.message)
           }
@@ -58,20 +58,20 @@ export const LiveService = {
       throw new Error('Failed to deduct wagers: ' + err.message)
     }
 
-    const result = LiveModel.acceptChallenge(numericId)
+    const result = await LiveModel.acceptChallenge(numericId)
     if (result?.challenge && result?.match) {
       const usernames = [result.challenge.challenger_username, result.challenge.opponent_username]
-      PlayerModel.clearBet(result.challenge.challenger_username)
-      PlayerModel.clearBet(result.challenge.opponent_username)
+      await PlayerModel.clearBet(result.challenge.challenger_username)
+      await PlayerModel.clearBet(result.challenge.opponent_username)
       broadcastLiveEvent(usernames, 'challenge_accepted', { challenge: result.challenge, match: result.match })
     }
     return result
   },
 
-  declineChallenge(id) {
+  async declineChallenge(id) {
     const numericId = Number(id)
     if (!numericId) throw new Error('Challenge id is required')
-    const challenge = LiveModel.declineChallenge(numericId)
+    const challenge = await LiveModel.declineChallenge(numericId)
     if (challenge) {
       // Tell the challenger their challenge was declined so their UI updates
       broadcastLiveEvent([challenge.challenger_username], 'challenge_declined', { challenge })
@@ -79,14 +79,14 @@ export const LiveService = {
     return challenge
   },
 
-  recordMove({ matchId, playerUsername, index }) {
+  async recordMove({ matchId, playerUsername, index }) {
     const numericId = Number(matchId)
     const moveIndex = Number(index)
     if (!numericId) throw new Error('Match id is required')
     if (!playerUsername) throw new Error('playerUsername is required')
     if (!Number.isInteger(moveIndex) || moveIndex < 0 || moveIndex > 8) throw new Error('Move index must be between 0 and 8')
     console.log(`[LiveService.recordMove] matchId=${numericId} player=${playerUsername} index=${moveIndex}`)
-    const updatedMatch = LiveModel.recordMove({ matchId: numericId, playerUsername, index: moveIndex })
+    const updatedMatch = await LiveModel.recordMove({ matchId: numericId, playerUsername, index: moveIndex })
     if (updatedMatch) {
       const matchParticipants = [updatedMatch.player_x_username, updatedMatch.player_o_username]
       console.log(`[LiveService.recordMove] broadcast move_made for matchId=${updatedMatch.id}`)
@@ -94,21 +94,21 @@ export const LiveService = {
       if (updatedMatch.status === 'finished') {
         // settle payments for the finished match (owner token not provided)
         try {
-          XoService.settleMatch(updatedMatch)
+          await XoService.settleMatch(updatedMatch)
         } catch (err) {
           console.error('[LiveService.recordMove] failed to settle match payments', err.message)
         }
         // update stats
         try {
           if (updatedMatch.result === 'draw') {
-            StatsModel.incrementDraw(updatedMatch.player_x_username)
-            StatsModel.incrementDraw(updatedMatch.player_o_username)
+            await StatsModel.incrementDraw(updatedMatch.player_x_username)
+            await StatsModel.incrementDraw(updatedMatch.player_o_username)
           } else if (updatedMatch.result === 'x_win') {
-            StatsModel.incrementWin(updatedMatch.player_x_username)
-            StatsModel.incrementLoss(updatedMatch.player_o_username)
+            await StatsModel.incrementWin(updatedMatch.player_x_username)
+            await StatsModel.incrementLoss(updatedMatch.player_o_username)
           } else if (updatedMatch.result === 'o_win') {
-            StatsModel.incrementWin(updatedMatch.player_o_username)
-            StatsModel.incrementLoss(updatedMatch.player_x_username)
+            await StatsModel.incrementWin(updatedMatch.player_o_username)
+            await StatsModel.incrementLoss(updatedMatch.player_x_username)
           }
         } catch (err) {
           console.error('[LiveService.recordMove] failed to update stats', err.message)
@@ -122,28 +122,28 @@ export const LiveService = {
     return updatedMatch
   },
 
-  forfeitMatch({ matchId, leavingUsername }) {
+  async forfeitMatch({ matchId, leavingUsername }) {
     const numericId = Number(matchId)
     if (!numericId) throw new Error('Match id is required')
     if (!leavingUsername) throw new Error('leavingUsername is required')
     console.log(`[LiveService.forfeitMatch] matchId=${numericId} leaving=${leavingUsername}`)
-    const updatedMatch = LiveModel.forfeitMatch({ matchId: numericId, leavingUsername })
+    const updatedMatch = await LiveModel.forfeitMatch({ matchId: numericId, leavingUsername })
     if (updatedMatch) {
       const matchParticipants = [updatedMatch.player_x_username, updatedMatch.player_o_username]
       console.log(`[LiveService.forfeitMatch] broadcast match_finished for matchId=${updatedMatch.id}`)
       try {
-        XoService.settleMatch(updatedMatch)
+        await XoService.settleMatch(updatedMatch)
       } catch (err) {
         console.error('[LiveService.forfeitMatch] failed to settle payments', err.message)
       }
       try {
         // Update stats for forfeit case
         if (updatedMatch.result === 'x_win') {
-          StatsModel.incrementWin(updatedMatch.player_x_username)
-          StatsModel.incrementLoss(updatedMatch.player_o_username)
+          await StatsModel.incrementWin(updatedMatch.player_x_username)
+          await StatsModel.incrementLoss(updatedMatch.player_o_username)
         } else if (updatedMatch.result === 'o_win') {
-          StatsModel.incrementWin(updatedMatch.player_o_username)
-          StatsModel.incrementLoss(updatedMatch.player_x_username)
+          await StatsModel.incrementWin(updatedMatch.player_o_username)
+          await StatsModel.incrementLoss(updatedMatch.player_x_username)
         }
       } catch (err) {
         console.error('[LiveService.forfeitMatch] failed to update stats', err.message)
@@ -153,17 +153,17 @@ export const LiveService = {
     return updatedMatch
   },
 
-  listMatches() {
+  async listMatches() {
     return LiveModel.getMatches()
   },
 
-  getMatch(id) {
+  async getMatch(id) {
     const numericId = Number(id)
     if (!numericId) throw new Error('Match id is required')
     return LiveModel.getMatchById(numericId)
   },
 
-  getPendingChallenges(username) {
+  async getPendingChallenges(username) {
     return LiveModel.getPendingChallenges(username)
   },
 }

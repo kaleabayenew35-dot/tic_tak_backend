@@ -14,7 +14,7 @@ export const XoController = {
         return res.status(400).json({ ok: false, error: 'token and launch are required' })
       }
 
-      const tokenRow = TokenModel.findByToken(token)
+      const tokenRow = await TokenModel.findByToken(token)
       if (!tokenRow || tokenRow.status !== 'active' || !(tokenRow.backend_url || tokenRow.backend)) {
         return res.json({ ok: true, data: { balance: null } })
       }
@@ -74,24 +74,24 @@ export const XoController = {
       if (action === 'ping') return res.json({ ok: true, message: 'pong' })
       if (action === 'get_balance') {
         const username = payload.username || payload.phone
-        const result = XoService.getPlayerBalance({ username })
+        const result = await XoService.getPlayerBalance({ username })
         return res.json({ ok: true, balance: result.data.balance })
       }
       if (['deduct', 'credit', 'loss', 'refund', 'owner_fee'].includes(action)) {
         if (action === 'owner_fee') {
           const { amount, gameId, game_id, username } = payload
-          const tokenRow = TokenModel.findByToken(token)
+          const tokenRow = await TokenModel.findByToken(token)
           let ownerId = null
           let ownerUsername = username || null
           if (tokenRow && tokenRow.owner_id) {
-            const owner = PlayerModel.findById(tokenRow.owner_id)
+            const owner = await PlayerModel.findById(tokenRow.owner_id)
             if (owner) {
               ownerId = owner.id
               ownerUsername = owner.username
             }
           }
 
-          TransactionModel.create({
+          await TransactionModel.create({
             owner_id: ownerId,
             owner_username: ownerUsername,
             amount: Number(amount || 0),

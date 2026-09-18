@@ -1,14 +1,12 @@
-import db from '../config/db.js'
+import { query } from '../config/db.js'
 
 export const AiConfigModel = {
-  get() {
-    db.prepare('INSERT OR IGNORE INTO ai_config (id, ai_enabled) VALUES (1, 1)').run()
-    return db.prepare('SELECT id, ai_enabled FROM ai_config WHERE id = 1').get()
+  async get() {
+    const { rows } = await query('SELECT id, ai_enabled FROM ai_config WHERE id = 1')
+    return rows[0] || null
   },
-
-  update(enabled) {
-    db.prepare('INSERT OR IGNORE INTO ai_config (id, ai_enabled) VALUES (1, 1)').run()
-    db.prepare('UPDATE ai_config SET ai_enabled = ? WHERE id = 1').run(enabled ? 1 : 0)
+  async update(enabled) {
+    await query('UPDATE ai_config SET ai_enabled = $1 WHERE id = 1', [enabled ? 1 : 0])
     return this.get()
   },
 }

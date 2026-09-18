@@ -3,8 +3,8 @@ import { TransactionModel } from '../models/transactionModel.js'
 import { OwnerCallbackService } from '../services/ownerCallback.js'
 
 export const XoService = {
-  getPlayerBalance({ username }) {
-    const player = XoModel.ensurePlayer({ username })
+  async getPlayerBalance({ username }) {
+    const player = await XoModel.ensurePlayer({ username })
     return { ok: true, data: { balance: Number(player.balance || 0) } }
   },
 
@@ -16,20 +16,20 @@ export const XoService = {
     switch (action) {
       case 'deduct': {
         // Deduct amount from player; caller must have ensured player exists
-        const player = XoModel.ensurePlayer({ username })
-        const updated = XoModel.adjustPlayerBalance(username, -amount)
+        const player = await XoModel.ensurePlayer({ username })
+        const updated = await XoModel.adjustPlayerBalance(username, -amount)
         try {
-          TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: -amount, type: 'deduct', reference: gameId || token || null })
+          await TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: -amount, type: 'deduct', reference: gameId || token || null })
         } catch (err) {
           console.error('[XoService.gameAction] failed to record transaction', err.message)
         }
         return { ok: true, data: { balance: Number(updated.balance || 0) } }
       }
       case 'credit': {
-        const player = XoModel.ensurePlayer({ username })
-        const updated = XoModel.adjustPlayerBalance(username, amount)
+        const player = await XoModel.ensurePlayer({ username })
+        const updated = await XoModel.adjustPlayerBalance(username, amount)
         try {
-          TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: amount, type: 'credit', reference: gameId || token || null })
+          await TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: amount, type: 'credit', reference: gameId || token || null })
         } catch (err) {
           console.error('[XoService.gameAction] failed to record transaction', err.message)
         }
@@ -37,19 +37,19 @@ export const XoService = {
       }
       case 'loss': {
         // Record a loss event (no balance change if already deducted)
-        const player = XoModel.findPlayerByUsername(username) || XoModel.ensurePlayer({ username })
+        const player = await XoModel.findPlayerByUsername(username) || await XoModel.ensurePlayer({ username })
         try {
-          TransactionModel.create({ owner_id: player.id, owner_username: player.username, amount: 0, type: 'loss', reference: gameId || token || null })
+          await TransactionModel.create({ owner_id: player.id, owner_username: player.username, amount: 0, type: 'loss', reference: gameId || token || null })
         } catch (err) {
           console.error('[XoService.gameAction] failed to record loss transaction', err.message)
         }
         return { ok: true, data: { balance: Number((player && player.balance) || 0) } }
       }
       case 'refund': {
-        const player = XoModel.ensurePlayer({ username })
-        const updated = XoModel.adjustPlayerBalance(username, amount)
+        const player = await XoModel.ensurePlayer({ username })
+        const updated = await XoModel.adjustPlayerBalance(username, amount)
         try {
-          TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: amount, type: 'refund', reference: gameId || token || null })
+          await TransactionModel.create({ owner_id: updated.id, owner_username: updated.username, amount: amount, type: 'refund', reference: gameId || token || null })
         } catch (err) {
           console.error('[XoService.gameAction] failed to record refund transaction', err.message)
         }
@@ -71,11 +71,11 @@ export const XoService = {
         // Each player gets back their bet minus 5% owner fee each
         const eachFee = Math.round((wager * 0.05) * 100) / 100
         const refundAmount = Math.round((wager - eachFee) * 100) / 100
-        const updatedX = XoModel.adjustPlayerBalance(match.player_x_username, refundAmount)
-        const updatedO = XoModel.adjustPlayerBalance(match.player_o_username, refundAmount)
+        const updatedX = await XoModel.adjustPlayerBalance(match.player_x_username, refundAmount)
+        const updatedO = await XoModel.adjustPlayerBalance(match.player_o_username, refundAmount)
         try {
-          TransactionModel.create({ owner_id: updatedX.id, owner_username: updatedX.username, amount: refundAmount, type: 'draw_refund', reference: match.id })
-          TransactionModel.create({ owner_id: updatedO.id, owner_username: updatedO.username, amount: refundAmount, type: 'draw_refund', reference: match.id })
+          await TransactionModel.create({ owner_id: updatedX.id, owner_username: updatedX.username, amount: refundAmount, type: 'draw_refund', reference: match.id })
+          await TransactionModel.create({ owner_id: updatedO.id, owner_username: updatedO.username, amount: refundAmount, type: 'draw_refund', reference: match.id })
         } catch (err) {
           console.error('[XoService.settleMatch] failed to record refund transactions', err.message)
         }
@@ -98,7 +98,7 @@ export const XoService = {
             console.error('[XoService.settleMatch] failed to dispatch draw callbacks', err.message)
           }
         }
-        if (token) XoModel.addToOwnerBalance(token, ownerFee)
+        if (token) await XoModel.addToOwnerBalance(token, ownerFee)
         return { ok: true }
       }
 
@@ -107,13 +107,13 @@ export const XoService = {
       if (!winner) return { ok: false, error: 'No winner to credit' }
 
       const winnerAmount = Math.round((pot - ownerFee) * 100) / 100
-      const updatedWinner = XoModel.adjustPlayerBalance(winner, winnerAmount)
+      const updatedWinner = await XoModel.adjustPlayerBalance(winner, winnerAmount)
       try {
-        TransactionModel.create({ owner_id: updatedWinner.id, owner_username: updatedWinner.username, amount: winnerAmount, type: 'win_credit', reference: match.id })
+        await TransactionModel.create({ owner_id: updatedWinner.id, owner_username: updatedWinner.username, amount: winnerAmount, type: 'win_credit', reference: match.id })
       } catch (err) {
         console.error('[XoService.settleMatch] failed to record win transaction', err.message)
       }
-      if (token) XoModel.addToOwnerBalance(token, ownerFee)
+      if (token) await XoModel.addToOwnerBalance(token, ownerFee)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: err.message }

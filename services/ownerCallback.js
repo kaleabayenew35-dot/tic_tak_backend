@@ -1,44 +1,44 @@
-import db from '../config/db.js'
+import { query } from '../config/db.js'
 import { normalizePhone } from '../utils/phone.js'
 
 const CALL_TIMEOUT_MS = 5000
 
-function getTokenRow(tokenStr) {
+async function getTokenRow(tokenStr) {
   if (!tokenStr) return null
-  return db.prepare('SELECT * FROM tokens WHERE token = ?').get(String(tokenStr))
+  const { rows } = await query('SELECT * FROM tokens WHERE token = $1', [String(tokenStr)])
+  return rows[0] || null
 }
 
-function getBackendInfo(tokenId) {
+async function getBackendInfo(tokenId) {
   if (!tokenId) return null
-  return db.prepare('SELECT id, token, owner_id, backend_url, backend, status FROM tokens WHERE id = ?').get(Number(tokenId))
+  const { rows } = await query('SELECT id, token, owner_id, backend_url, backend, status FROM tokens WHERE id = $1', [Number(tokenId)])
+  return rows[0] || null
 }
 
-function getTokenIdForPlayer(playerId) {
+async function getTokenIdForPlayer(playerId) {
   if (!playerId) return null
-  const row = db.prepare('SELECT id FROM tokens WHERE owner_id = ? ORDER BY created_at DESC LIMIT 1').get(Number(playerId))
+  const { rows } = await query('SELECT id FROM tokens WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 1', [Number(playerId)])
+  const row = rows[0]
   return row?.id || null
 }
 
-function insertOutboxRow(tokenId, gameId, action, payload) {
-  const stmt = db.prepare(
-    'INSERT INTO pending_owner_callbacks (token_id, game_id, action, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  )
-  const info = stmt.run(tokenId, gameId, action, JSON.stringify(payload), 'pending', 0, Date.now(), Date.now())
-  return info.lastInsertRowid
+async function insertOutboxRow(tokenId, gameId, action, payload) {
+  const { rows } = await query('INSERT INTO pending_owner_callbacks (token_id, game_id, action, payload_json, status, attempts, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id', [tokenId, gameId, action, JSON.stringify(payload), 'pending', 0, Date.now(), Date.now()])
+  return rows[0]?.id
 }
 
-function markDelivered(outboxId) {
+async function markDelivered(outboxId) {
   if (!outboxId) return null
-  return db.prepare('UPDATE pending_owner_callbacks SET status = ?, updated_at = ? WHERE id = ?').run('delivered', Date.now(), Number(outboxId))
+  return query('UPDATE pending_owner_callbacks SET status = $1, updated_at = $2 WHERE id = $3', ['delivered', Date.now(), Number(outboxId)])
 }
 
-function markAttemptFailed(outboxId, errorMsg, maxAttempts = 10) {
+async function markAttemptFailed(outboxId, errorMsg, maxAttempts = 10) {
   if (!outboxId) return null
-  const current = db.prepare('SELECT attempts FROM pending_owner_callbacks WHERE id = ?').get(Number(outboxId))
+  const { rows } = await query('SELECT attempts FROM pending_owner_callbacks WHERE id = $1', [Number(outboxId)])
+  const current = rows[0]
   const nextAttempts = (current?.attempts || 0) + 1
   const status = nextAttempts >= maxAttempts ? 'failed' : 'pending'
-  const stmt = db.prepare('UPDATE pending_owner_callbacks SET attempts = ?, last_error = ?, status = ?, updated_at = ? WHERE id = ?')
-  return stmt.run(nextAttempts, errorMsg, status, Date.now(), Number(outboxId))
+  return query('UPDATE pending_owner_callbacks SET attempts = $1, last_error = $2, status = $3, updated_at = $4 WHERE id = $5', [nextAttempts, errorMsg, status, Date.now(), Number(outboxId)])
 }
 
 async function callXoEndpoint(backendUrl, body) {
@@ -69,18 +69,18 @@ async function callXoEndpoint(backendUrl, body) {
 }
 
 async function dispatchCallback(tokenId, gameId, backendUrl, payload) {
-  const outboxId = insertOutboxRow(tokenId, gameId, payload.action, payload)
+  const outboxId = await insertOutboxRow(tokenId, gameId, payload.action, payload)
   const result = await callXoEndpoint(backendUrl, payload)
   if (result && result.ok !== false) {
-    markDelivered(outboxId)
+    await markDelivered(outboxId)
     return result
   }
-  markAttemptFailed(outboxId, result?.error || 'callback failed', 10)
+  await markAttemptFailed(outboxId, result?.error || 'callback failed', 10)
   return result
 }
 
 async function fetchOwnerBalance(tokenStr, phone, username) {
-  const tokenRow = getTokenRow(tokenStr)
+  const tokenRow = await getTokenRow(tokenStr)
   if (!tokenRow || tokenRow.status !== 'active') return null
   const backendUrl = (tokenRow.backend_url || tokenRow.backend || '').toString().trim()
   if (!backendUrl) return null
@@ -102,7 +102,7 @@ async function fetchOwnerBalance(tokenStr, phone, username) {
 }
 
 async function notifyBetPlaced(tokenId, { player1Id, player2Id, betAmount, gameId }) {
-  const backendInfo = getBackendInfo(tokenId)
+  const backendInfo = await getBackendInfo(tokenId)
   if (!backendInfo) return null
   const backendUrl = (backendInfo.backend_url || backendInfo.backend || '').toString().trim()
   if (!backendUrl) return null
@@ -121,7 +121,7 @@ async function notifyBetPlaced(tokenId, { player1Id, player2Id, betAmount, gameI
 }
 
 async function notifyWinPayout(tokenId, { winnerId, loserId, winnerPayout, fee, gameId }) {
-  const backendInfo = getBackendInfo(tokenId)
+  const backendInfo = await getBackendInfo(tokenId)
   if (!backendInfo) return null
   const backendUrl = (backendInfo.backend_url || backendInfo.backend || '').toString().trim()
   if (!backendUrl) return null
@@ -136,7 +136,7 @@ async function notifyWinPayout(tokenId, { winnerId, loserId, winnerPayout, fee, 
 }
 
 async function notifyDrawRefund(tokenId, { player1Id, player2Id, refund, fee, gameId }) {
-  const backendInfo = getBackendInfo(tokenId)
+  const backendInfo = await getBackendInfo(tokenId)
   if (!backendInfo) return null
   const backendUrl = (backendInfo.backend_url || backendInfo.backend || '').toString().trim()
   if (!backendUrl) return null
@@ -150,7 +150,7 @@ async function notifyDrawRefund(tokenId, { player1Id, player2Id, refund, fee, ga
 }
 
 async function notifyOwnerFee(tokenId, { amount, type, gameId, humanPlayerId }) {
-  const backendInfo = getBackendInfo(tokenId)
+  const backendInfo = await getBackendInfo(tokenId)
   if (!backendInfo) return null
   const backendUrl = (backendInfo.backend_url || backendInfo.backend || '').toString().trim()
   if (!backendUrl) return null

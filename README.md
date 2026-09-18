@@ -1,21 +1,17 @@
 # XO Backend
 
-Simple Node.js + Express backend using SQLite.
+Node.js + Express backend using PostgreSQL.
 
 ## Setup
 
 Install dependencies:
 
 ```bash
-cd backend
+cd xo_backend
 npm install
 ```
 
-Initialize the database:
-
-```bash
-npm run init-db
-```
+Set `DATABASE_URL` to your PostgreSQL connection string. The schema is created automatically on startup.
 
 Start the backend:
 

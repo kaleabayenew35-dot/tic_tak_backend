@@ -2,7 +2,7 @@ import { GameModel } from '../models/gameModel.js'
 import { OwnerCallbackService } from '../services/ownerCallback.js'
 
 export const GameService = {
-  getGames() {
+  async getGames() {
     return GameModel.findAll()
   },
 
@@ -12,7 +12,7 @@ export const GameService = {
       throw new Error('player_x_id, player_o_id, and result are required')
     }
 
-    const game = GameModel.create(payload)
+    const game = await GameModel.create(payload)
 
     if (token_id && bet_amount) {
       try {
