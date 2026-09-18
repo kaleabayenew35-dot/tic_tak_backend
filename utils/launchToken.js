@@ -26,6 +26,14 @@ export async function verifyLaunchToken(launchToken, systemBackendUrl) {
   }
 
   if (!payload || payload.valid !== true) {
+    // Surface token-expiry as a distinct error so callers can respond
+    // with a clear "session expired" message instead of a generic 400.
+    const reason = (payload?.reason || '').toLowerCase()
+    if (reason.includes('expired')) {
+      const err = new Error('Launch token has expired. Please restart the game from Telegram.')
+      err.code = 'LAUNCH_TOKEN_EXPIRED'
+      throw err
+    }
     return null
   }
 

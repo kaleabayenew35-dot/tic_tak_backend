@@ -19,7 +19,15 @@ export const XoController = {
         return res.json({ ok: true, data: { balance: null } })
       }
 
-      const launchData = await verifyLaunchToken(launch, process.env.SYSTEM_BACKEND_URL)
+      let launchData
+      try {
+        launchData = await verifyLaunchToken(launch, process.env.SYSTEM_BACKEND_URL)
+      } catch (verifyErr) {
+        if (verifyErr.code === 'LAUNCH_TOKEN_EXPIRED') {
+          return res.status(401).json({ ok: false, error: verifyErr.message, code: 'LAUNCH_TOKEN_EXPIRED' })
+        }
+        throw verifyErr
+      }
       if (!launchData) {
         return res.json({ ok: true, data: { balance: null } })
       }
@@ -50,7 +58,15 @@ export const XoController = {
         return res.status(400).json({ ok: false, error: 'token and launch are required' })
       }
 
-      const launchData = await verifyLaunchToken(launch, process.env.SYSTEM_BACKEND_URL)
+      let launchData
+      try {
+        launchData = await verifyLaunchToken(launch, process.env.SYSTEM_BACKEND_URL)
+      } catch (verifyErr) {
+        if (verifyErr.code === 'LAUNCH_TOKEN_EXPIRED') {
+          return res.status(401).json({ ok: false, error: verifyErr.message, code: 'LAUNCH_TOKEN_EXPIRED' })
+        }
+        throw verifyErr
+      }
       if (!launchData) {
         return res.status(400).json({ ok: false, error: 'Invalid launch token' })
       }
