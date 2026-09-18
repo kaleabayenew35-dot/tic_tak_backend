@@ -14,11 +14,10 @@ export const XoController = {
         return res.status(400).json({ ok: false, error: 'token and launch are required' })
       }
 
-      const tokenRow = await TokenModel.findByToken(token)
-      if (!tokenRow || tokenRow.status !== 'active' || !(tokenRow.backend_url || tokenRow.backend)) {
-        return res.json({ ok: true, data: { balance: null } })
-      }
-
+      // Verify the launch token against the system backend — this is the
+      // authoritative source of truth regardless of whether we have a local
+      // token record.  A missing local record just means the token hasn't been
+      // seeded yet; we should still let the user in.
       let launchData
       try {
         launchData = await verifyLaunchToken(launch, process.env.SYSTEM_BACKEND_URL)
@@ -28,12 +27,39 @@ export const XoController = {
         }
         throw verifyErr
       }
+
       if (!launchData) {
-        return res.json({ ok: true, data: { balance: null } })
+        return res.status(401).json({ ok: false, error: 'Invalid or unrecognised launch token', code: 'INVALID_LAUNCH_TOKEN' })
       }
 
-      const ownerBalance = await OwnerCallbackService.fetchOwnerBalance(token, normalizePhone(launchData.phone), launchData.username)
-      return res.json({ ok: true, data: { balance: ownerBalance?.balance ?? null, username: ownerBalance?.username ?? launchData.username } })
+      // Try to enrich with live balance from the owner callback backend if a
+      // local token record with a backend_url exists.  This is best-effort —
+      // fall back to the balance encoded in the launch token on any failure.
+      const tokenRow = await TokenModel.findByToken(token).catch(() => null)
+      const hasBackend = tokenRow && tokenRow.status === 'active' && (tokenRow.backend_url || tokenRow.backend)
+
+      let balance  = launchData.balance !== undefined ? Number(launchData.balance) : null
+      let username = launchData.username
+
+      if (hasBackend) {
+        try {
+          const ownerBalance = await OwnerCallbackService.fetchOwnerBalance(
+            token,
+            normalizePhone(launchData.phone),
+            launchData.username
+          )
+          if (ownerBalance?.balance !== null && ownerBalance?.balance !== undefined) {
+            balance  = ownerBalance.balance
+          }
+          if (ownerBalance?.username) {
+            username = ownerBalance.username
+          }
+        } catch {
+          // owner callback failed — keep launch-token values
+        }
+      }
+
+      return res.json({ ok: true, data: { balance, username } })
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message })
     }
