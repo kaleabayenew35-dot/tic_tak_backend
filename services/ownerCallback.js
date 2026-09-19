@@ -19,7 +19,7 @@ async function resolvePlayerIdentity(username) {
   }
 }
 
-async function callSystemDama(action, username, amount, gameId) {
+async function callSystemDama(action, username, amount, gameId, type = null) {
   const backendUrl = SYSTEM_BACKEND_URL()
   const token = DAMA_GAME_TOKEN()
   if (!backendUrl || !token) {
@@ -35,6 +35,7 @@ async function callSystemDama(action, username, amount, gameId) {
     ...(identity.phone ? { phone: identity.phone } : {}),
     amount: Number(amount || 0),
     gameId: String(gameId || ''),
+    ...(type ? { type } : {}),
   }
 
   try {
@@ -75,6 +76,10 @@ async function notifySystemDrawRefund({ player1Username, player2Username, refund
     callSystemDama('refund', player1Username, refund, gameId),
     callSystemDama('refund', player2Username, refund, gameId),
   ])
+}
+
+async function notifySystemOwnerFee({ amount, type, gameId }) {
+  return callSystemDama('owner_fee', null, amount, gameId, type)
 }
 
 async function getTokenRow(tokenStr) {
@@ -236,6 +241,7 @@ export const OwnerCallbackService = {
   notifySystemBetPlaced,
   notifySystemWinPayout,
   notifySystemDrawRefund,
+  notifySystemOwnerFee,
   insertOutboxRow,
   markDelivered,
   markAttemptFailed,

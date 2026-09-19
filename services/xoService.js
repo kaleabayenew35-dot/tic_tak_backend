@@ -89,6 +89,11 @@ export const XoService = {
           refund: refundAmount,
           gameId: match.id,
         })
+        await OwnerCallbackService.notifySystemOwnerFee({
+          amount: eachFee * 2,
+          type: 'pvp_draw_fee',
+          gameId: match.id,
+        })
         if (token) {
           try {
             await OwnerCallbackService.notifyDrawRefund(tokenId, {
@@ -130,6 +135,11 @@ export const XoService = {
         winnerUsername: winner,
         loserUsername: loser,
         winnerPayout: winnerAmount,
+        gameId: match.id,
+      })
+      await OwnerCallbackService.notifySystemOwnerFee({
+        amount: ownerFee,
+        type: 'pvp_win_fee',
         gameId: match.id,
       })
       if (token) await XoModel.addToOwnerBalance(token, ownerFee)
