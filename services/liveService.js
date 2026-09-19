@@ -4,18 +4,25 @@ import { PlayerModel } from '../models/playerModel.js'
 import { XoService } from './xoService.js'
 import { StatsModel } from '../models/statsModel.js'
 
+function normalizeUsername(value) {
+  return String(value || '').trim().replace(/^@/, '')
+}
+
 export const LiveService = {
   async listChallenges() {
     return LiveModel.getChallenges()
   },
 
   async createChallenge(payload) {
-    const challengerUsername = payload.challengerUsername || payload.challenger || payload.username
-    const opponentUsername = payload.opponentUsername || payload.opponent || payload.receiver
+    const challengerUsername = normalizeUsername(payload.challengerUsername || payload.challenger || payload.username)
+    const opponentUsername = normalizeUsername(payload.opponentUsername || payload.opponent || payload.receiver)
     const wagerAmount = Number(payload.wagerAmount ?? payload.amount ?? payload.betAmount ?? 0)
 
     if (!challengerUsername || !opponentUsername) {
       throw new Error('challengerUsername and opponentUsername are required')
+    }
+    if (!Number.isFinite(wagerAmount) || wagerAmount <= 0) {
+      throw new Error('wagerAmount must be a positive number')
     }
 
     const challenge = await LiveModel.createChallenge({ challengerUsername, opponentUsername, wagerAmount })
