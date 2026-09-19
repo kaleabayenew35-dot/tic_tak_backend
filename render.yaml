@@ -19,3 +19,5 @@ services:
         value: https://tic-tak-5qd1.onrender.com
       - key: CORS_ORIGINS
         value: https://tic-tak-5qd1.onrender.com,https://system-admin-iou9.onrender.com,https://system-backend-1u5m.onrender.com
+      - key: XO_ADMIN_TOKEN
+        value: xo-admin-secret-change-me
