@@ -30,6 +30,7 @@ const schema = [
     status TEXT NOT NULL DEFAULT 'online', selected_bet_amount REAL, is_demo INTEGER NOT NULL DEFAULT 0,
     created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`,
+  `ALTER TABLE players ADD COLUMN IF NOT EXISTS phone TEXT`,
   `CREATE TABLE IF NOT EXISTS games (
     id SERIAL PRIMARY KEY, player_x_id INTEGER NOT NULL, player_o_id INTEGER NOT NULL,
     result TEXT NOT NULL, moves TEXT, created_at BIGINT NOT NULL

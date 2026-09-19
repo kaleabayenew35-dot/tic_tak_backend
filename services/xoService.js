@@ -2,6 +2,10 @@ import { XoModel } from '../models/xoModel.js'
 import { TransactionModel } from '../models/transactionModel.js'
 import { OwnerCallbackService } from '../services/ownerCallback.js'
 
+function normalizeUsername(value) {
+  return String(value || '').trim().replace(/^@/, '').toLowerCase()
+}
+
 export const XoService = {
   async getPlayerBalance({ username }) {
     const player = await XoModel.ensurePlayer({ username })
@@ -79,6 +83,12 @@ export const XoService = {
         } catch (err) {
           console.error('[XoService.settleMatch] failed to record refund transactions', err.message)
         }
+        await OwnerCallbackService.notifySystemDrawRefund({
+          player1Username: match.player_x_username,
+          player2Username: match.player_o_username,
+          refund: refundAmount,
+          gameId: match.id,
+        })
         if (token) {
           try {
             await OwnerCallbackService.notifyDrawRefund(tokenId, {
@@ -113,6 +123,15 @@ export const XoService = {
       } catch (err) {
         console.error('[XoService.settleMatch] failed to record win transaction', err.message)
       }
+      const loser = normalizeUsername(match.player_x_username) === normalizeUsername(winner)
+        ? match.player_o_username
+        : match.player_x_username
+      await OwnerCallbackService.notifySystemWinPayout({
+        winnerUsername: winner,
+        loserUsername: loser,
+        winnerPayout: winnerAmount,
+        gameId: match.id,
+      })
       if (token) await XoModel.addToOwnerBalance(token, ownerFee)
       return { ok: true }
     } catch (err) {

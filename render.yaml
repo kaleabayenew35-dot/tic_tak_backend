@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tic-tak-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SYSTEM_BACKEND_URL
+        value: https://system-backend-1u5m.onrender.com
+      - key: DAMA_GAME_TOKEN
+        sync: false
+      - key: FRONTEND_URL
+        value: https://tic-tak-5qd1.onrender.com
+      - key: CORS_ORIGINS
+        value: https://tic-tak-5qd1.onrender.com,https://system-admin-iou9.onrender.com,https://system-backend-1u5m.onrender.com

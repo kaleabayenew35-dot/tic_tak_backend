@@ -2,6 +2,80 @@ import { query } from '../config/db.js'
 import { normalizePhone } from '../utils/phone.js'
 
 const CALL_TIMEOUT_MS = 5000
+const SYSTEM_BACKEND_URL = () => process.env.SYSTEM_BACKEND_URL?.trim().replace(/\/+$/, '')
+const DAMA_GAME_TOKEN = () => process.env.DAMA_GAME_TOKEN?.trim()
+
+async function resolvePlayerIdentity(username) {
+  const value = String(username || '').trim().replace(/^@/, '').toLowerCase()
+  if (!value) return { username: null, phone: null }
+  const { rows } = await query(
+    "SELECT username, phone FROM players WHERE lower(replace(trim(username), '@', '')) = $1",
+    [value],
+  )
+  const player = rows[0]
+  return {
+    username: player?.username || String(username).trim().replace(/^@/, ''),
+    phone: player?.phone ? normalizePhone(player.phone) : null,
+  }
+}
+
+async function callSystemDama(action, username, amount, gameId) {
+  const backendUrl = SYSTEM_BACKEND_URL()
+  const token = DAMA_GAME_TOKEN()
+  if (!backendUrl || !token) {
+    console.warn('[OwnerCallbackService] system callback skipped: SYSTEM_BACKEND_URL or DAMA_GAME_TOKEN is missing')
+    return null
+  }
+
+  const identity = await resolvePlayerIdentity(username)
+  const payload = {
+    action,
+    token,
+    username: identity.username,
+    ...(identity.phone ? { phone: identity.phone } : {}),
+    amount: Number(amount || 0),
+    gameId: String(gameId || ''),
+  }
+
+  try {
+    const response = await fetch(`${backendUrl}/dama`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok || data?.ok === false) {
+      throw new Error(`HTTP ${response.status}: ${data?.error || 'callback failed'}`)
+    }
+    console.log(`[OwnerCallbackService] system ${action} callback succeeded for ${identity.username}, game=${gameId}`)
+    return data
+  } catch (error) {
+    console.error(`[OwnerCallbackService] system ${action} callback failed for ${identity.username}, game=${gameId}: ${error.message}`)
+    return null
+  }
+}
+
+async function notifySystemBetPlaced({ player1Username, player2Username, amount, gameId }) {
+  return Promise.all([
+    callSystemDama('deduct', player1Username, amount, gameId),
+    callSystemDama('deduct', player2Username, amount, gameId),
+  ])
+}
+
+async function notifySystemWinPayout({ winnerUsername, loserUsername, winnerPayout, gameId }) {
+  return Promise.all([
+    callSystemDama('credit', winnerUsername, winnerPayout, gameId),
+    callSystemDama('loss', loserUsername, 0, gameId),
+  ])
+}
+
+async function notifySystemDrawRefund({ player1Username, player2Username, refund, gameId }) {
+  return Promise.all([
+    callSystemDama('refund', player1Username, refund, gameId),
+    callSystemDama('refund', player2Username, refund, gameId),
+  ])
+}
 
 async function getTokenRow(tokenStr) {
   if (!tokenStr) return null
@@ -159,6 +233,9 @@ async function notifyOwnerFee(tokenId, { amount, type, gameId, humanPlayerId }) 
 }
 
 export const OwnerCallbackService = {
+  notifySystemBetPlaced,
+  notifySystemWinPayout,
+  notifySystemDrawRefund,
   insertOutboxRow,
   markDelivered,
   markAttemptFailed,

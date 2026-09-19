@@ -3,6 +3,7 @@ import { broadcastLiveEvent } from '../liveEventBus.js'
 import { PlayerModel } from '../models/playerModel.js'
 import { XoService } from './xoService.js'
 import { StatsModel } from '../models/statsModel.js'
+import { OwnerCallbackService } from './ownerCallback.js'
 
 function normalizeUsername(value) {
   return String(value || '').trim().replace(/^@/, '')
@@ -70,6 +71,12 @@ export const LiveService = {
       const usernames = [result.challenge.challenger_username, result.challenge.opponent_username]
       await PlayerModel.clearBet(result.challenge.challenger_username)
       await PlayerModel.clearBet(result.challenge.opponent_username)
+      await OwnerCallbackService.notifySystemBetPlaced({
+        player1Username: result.challenge.challenger_username,
+        player2Username: result.challenge.opponent_username,
+        amount: wager,
+        gameId: result.match.id,
+      })
       broadcastLiveEvent(usernames, 'challenge_accepted', { challenge: result.challenge, match: result.match })
     }
     return result
